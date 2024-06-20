@@ -1,0 +1,80 @@
+#include <Thermistor.h> 
+#include <Ethernet.h>   
+#include <SPI.h>        
+
+// Sensor de Temperatura
+Thermistor temp(2); 
+
+// Sensor de PH
+int pHSense = A0;     
+int samples = 20;
+int from_ad = 0;
+float adc_resolution = 1024.0;
+
+// Configurações de rede
+byte mac[] = { 0x00, 0x1A, 0xB6, 0x03, 0x2B, 0x4C };
+IPAddress ip(192, 168, 1, 10);
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress server(192, 168, 1, 100);
+EthernetClient client;
+
+int port = 5000;
+
+void setup() {
+  pinMode(Led, OUTPUT);
+  Serial.begin(9600);
+
+  Ethernet.begin(mac, ip, gateway, subnet);
+
+  delay(1000);
+
+  Serial.print("Endereço IP do Arduino: ");
+  Serial.println(Ethernet.localIP());
+}
+
+float ph(float voltage) {
+  return 7 + ((2.5 - voltage) / 0.18);
+}
+
+void loop() {
+  // Temperatura
+  int temperature = temp.getTemp();
+  Serial.print("Temperatura: ");
+  Serial.print(temperature);
+  Serial.println("*C");
+  delay(1000);
+
+  // PH
+  int measurings = 0;
+
+  for (int i = 0; i < samples; i++) {
+    from_ad = analogRead(pHSense);
+    measurings += from_ad;
+    delay(10);
+  }
+
+  float voltage = 5.0 / adc_resolution * measurings / samples;
+  float phValue = ph(voltage);
+
+  Serial.print("pH: ");
+  Serial.println(phValue);
+
+
+  if (client.connect(server, port)) {
+
+    String url = "/ValoresSensor/ReceiveData?temperature=" + String(temperature) + "&ph=" + String(phValue);
+    client.print("GET ");
+    client.print(url);
+    client.println(" HTTP/1.1");
+    client.println("Host: 192.168.1.100");
+    client.println("Connection: close");
+    client.println();
+    client.stop();
+
+  } else {
+    Serial.println("Conexão falhou");
+  }
+
+  delay(3000);
+}
